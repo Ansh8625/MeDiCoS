@@ -1,15 +1,71 @@
 import mysql.connector
 
-# Connect to MySQL
+# Connect to MySQL server
+def connect_to_server():
+    return mysql.connector.connect(
+        host="localhost",
+        user="root",
+        password="8625"
+    )
+
+# Connect to the database
 def connect_to_db():
     return mysql.connector.connect(
         host="localhost",
-        user="root",  # Replace with your MySQL username
-        password="8625",  # Replace with your MySQL password
+        user="root",
+        password="8625",
         database="MedicalStore"
     )
 
-# Login system
+# Setup the database and tables
+def setup_database():
+    try:
+        db = connect_to_server()
+        cursor = db.cursor()
+        cursor.execute("CREATE DATABASE IF NOT EXISTS MedicalStore")
+        db.close()
+
+        db = connect_to_db()
+        cursor = db.cursor()
+
+        # Create Users table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS Users (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password VARCHAR(50) NOT NULL,
+                role ENUM('Admin', 'Customer') NOT NULL
+            )
+        """)
+
+        # Create Medicines table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS Medicines (
+                medicine_id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                quantity INT NOT NULL,
+                price FLOAT NOT NULL
+            )
+        """)
+
+        # Create Sales table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS Sales (
+                sale_id INT AUTO_INCREMENT PRIMARY KEY,
+                medicine_name VARCHAR(100) NOT NULL,
+                quantity INT NOT NULL,
+                total_price FLOAT NOT NULL,
+                sale_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        print("Database setup complete!")
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+    finally:
+        cursor.close()
+        db.close()
+
+# Login functionality
 def login():
     while True:
         print("\n--- Login Menu ---")
@@ -23,12 +79,11 @@ def login():
         elif choice == "2":
             create_account()
         elif choice == "3":
-            print("Exiting the system. Goodbye!")
-            break
+            exit()
         else:
             print("Invalid choice. Please try again.")
 
-# Perform login
+# Perform login process
 def perform_login():
     try:
         db = connect_to_db()
@@ -43,13 +98,13 @@ def perform_login():
 
         if result:
             role = result[0]
-            print(f"\nLogin successful! Welcome, {role}.")
+            print(f"\nLogin successful! Welcome, {username}.")
             if role == "Admin":
                 admin_block()
             elif role == "Customer":
                 customer_block()
         else:
-            print("Invalid username or password. Please try again.")
+            print("Invalid username or password.")
     except mysql.connector.Error as err:
         print(f"Error: {err}")
     finally:
@@ -62,19 +117,18 @@ def create_account():
         db = connect_to_db()
         cursor = db.cursor()
 
-        print("\n--- Create Account ---")
         username = input("Enter a username: ")
         password = input("Enter a password: ")
         role = input("Enter role (Admin/Customer): ").capitalize()
 
         if role not in ['Admin', 'Customer']:
-            print("Invalid role. Please choose 'Admin' or 'Customer'.")
+            print("Invalid role. Please enter 'Admin' or 'Customer'.")
             return
 
         query = "INSERT INTO Users (username, password, role) VALUES (%s, %s, %s)"
         cursor.execute(query, (username, password, role))
         db.commit()
-        print(f"Account created successfully for {role}: {username}")
+        print("Account created successfully!")
     except mysql.connector.Error as err:
         print(f"Error: {err}")
     finally:
@@ -84,13 +138,13 @@ def create_account():
 # Admin functionalities
 def admin_block():
     while True:
-        print("\n--- Admin Block ---")
+        print("\n--- Admin Menu ---")
         print("1. Add Medicine")
         print("2. View Medicines")
-        print("3. Update Medicine Stock")
-        print("4. Delete Medicine")
-        print("5. Logout")
-
+        print("3. Delete Medicine")
+        print("4. Update Stock")
+        print("5. View Sales")
+        print("6. Logout")
         choice = input("Enter your choice: ")
 
         if choice == "1":
@@ -98,14 +152,35 @@ def admin_block():
         elif choice == "2":
             view_medicines()
         elif choice == "3":
-            update_stock()
-        elif choice == "4":
             delete_medicine()
+        elif choice == "4":
+            update_stock()
         elif choice == "5":
-            break
+            view_sales()
+        elif choice == "6":
+            logout()
         else:
             print("Invalid choice. Please try again.")
 
+# Customer functionalities
+def customer_block():
+    while True:
+        print("\n--- Customer Menu ---")
+        print("1. Buy Medicine")
+        print("2. View Available Medicines")
+        print("3. Logout")
+        choice = input("Enter your choice: ")
+
+        if choice == "1":
+            buy_medicine()
+        elif choice == "2":
+            view_medicines()
+        elif choice == "3":
+            logout()
+        else:
+            print("Invalid choice. Please try again.")
+
+# Add medicine to the database
 def add_medicine():
     try:
         db = connect_to_db()
@@ -113,126 +188,158 @@ def add_medicine():
 
         name = input("Enter medicine name: ")
         quantity = int(input("Enter quantity: "))
-        price = float(input("Enter price per unit: "))
+        price = float(input("Enter price: "))
 
         query = "INSERT INTO Medicines (name, quantity, price) VALUES (%s, %s, %s)"
         cursor.execute(query, (name, quantity, price))
         db.commit()
-
-        print(f"{name} added successfully!")
+        print("Medicine added successfully!")
     except mysql.connector.Error as err:
         print(f"Error: {err}")
     finally:
         cursor.close()
         db.close()
 
+# View medicines
 def view_medicines():
     try:
         db = connect_to_db()
         cursor = db.cursor()
 
         cursor.execute("SELECT * FROM Medicines")
-        medicines = cursor.fetchall()
+        results = cursor.fetchall()
 
-        print("\nAvailable Medicines:")
-        for med in medicines:
-            print(f"ID: {med[0]}, Name: {med[1]}, Quantity: {med[2]}, Price: {med[3]}")
+        print("\n--- Medicines Available ---")
+        if results:
+            for row in results:
+                print(f"ID: {row[0]}, Name: {row[1]}, Quantity: {row[2]}, Price: {row[3]}")
+        else:
+            print("No medicines available.")
     except mysql.connector.Error as err:
         print(f"Error: {err}")
     finally:
         cursor.close()
         db.close()
 
-def update_stock():
-    db = connect_to_db()
-    cursor = db.cursor()
-    
-    view_medicines()
-    med_id = int(input("Enter medicine ID to update: "))
-    new_quantity = int(input("Enter new quantity: "))
-    
-    query = "UPDATE Medicines SET quantity = %s WHERE medicine_id = %s"  # Use correct column name
-    cursor.execute(query, (new_quantity, med_id))
-    db.commit()
-    
-    print("Stock updated successfully!")
-    cursor.close()
-    db.close()
-
-
+# Delete medicine
 def delete_medicine():
     try:
         db = connect_to_db()
         cursor = db.cursor()
 
-        view_medicines()
-        med_id = int(input("Enter medicine ID to delete: "))
-
-        query = "DELETE FROM Medicines WHERE id = %s"
+        med_id = int(input("Enter the ID of the medicine to delete: "))
+        query = "DELETE FROM Medicines WHERE medicine_id = %s"
         cursor.execute(query, (med_id,))
         db.commit()
 
-        print("Medicine deleted successfully!")
+        if cursor.rowcount:
+            print("Medicine deleted successfully.")
+        else:
+            print("Medicine not found.")
     except mysql.connector.Error as err:
         print(f"Error: {err}")
     finally:
         cursor.close()
         db.close()
 
-# Customer functionalities
-def customer_block():
-    while True:
-        print("\n--- Customer Block ---")
-        print("1. View Medicines")
-        print("2. Buy Medicine")
-        print("3. Logout")
+# Update stock of medicine
+def update_stock():
+    try:
+        db = connect_to_db()
+        cursor = db.cursor()
 
-        choice = input("Enter your choice: ")
+        med_id = int(input("Enter medicine ID: "))
+        new_quantity = int(input("Enter new quantity: "))
 
-        if choice == "1":
-            view_medicines()
-        elif choice == "2":
-            buy_medicine()
-        elif choice == "3":
-            break
-        else:
-            print("Invalid choice. Please try again.")
-
-def buy_medicine():
-    db = connect_to_db()
-    cursor = db.cursor()
-    
-    view_medicines()
-    med_id = int(input("Enter medicine ID to buy: "))
-    quantity = int(input("Enter quantity to purchase: "))
-    
-    # Check availability (update column name from 'id' to correct one, e.g., 'medicine_id')
-    cursor.execute("SELECT * FROM Medicines WHERE medicine_id = %s", (med_id,))
-    medicine = cursor.fetchone()
-    
-    if medicine and medicine[2] >= quantity:
-        total_price = quantity * medicine[3]
-        
-        # Update stock
-        new_quantity = medicine[2] - quantity
-        cursor.execute("UPDATE Medicines SET quantity = %s WHERE medicine_id = %s", (new_quantity, med_id))
-        
-        # Record sale
-        cursor.execute("INSERT INTO Sales (medicine_name, quantity, total_price) VALUES (%s, %s, %s)", 
-                       (medicine[1], quantity, total_price))
-        
+        query = "UPDATE Medicines SET quantity = %s WHERE medicine_id = %s"
+        cursor.execute(query, (new_quantity, med_id))
         db.commit()
-        print(f"{quantity} units of {medicine[1]} purchased successfully! Total price: ₹{total_price}")
-    else:
-        print("Insufficient stock or invalid medicine ID.")
-    
-    cursor.close()
-    db.close()
 
+        if cursor.rowcount:
+            print("Stock updated successfully.")
+        else:
+            print("Medicine not found.")
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+    finally:
+        cursor.close()
+        db.close()
+
+# Buy medicine
+def buy_medicine():
+    try:
+        db = connect_to_db()
+        cursor = db.cursor()
+
+        med_id = int(input("Enter medicine ID to buy: "))
+        quantity = int(input("Enter quantity: "))
+
+        query = "SELECT name, price, quantity FROM Medicines WHERE medicine_id = %s"
+        cursor.execute(query, (med_id,))
+        result = cursor.fetchone()
+
+        if result:
+            name, price, available_quantity = result
+            if available_quantity >= quantity:
+                total_price = quantity * price
+
+                query = "INSERT INTO Sales (medicine_name, quantity, total_price) VALUES (%s, %s, %s)"
+                cursor.execute(query, (name, quantity, total_price))
+                db.commit()
+
+                query = "UPDATE Medicines SET quantity = %s WHERE medicine_id = %s"
+                cursor.execute(query, (available_quantity - quantity, med_id))
+                db.commit()
+
+                print(f"Medicine purchased! Total price: {total_price}")
+            else:
+                print("Not enough stock available.")
+        else:
+            print("Medicine not found.")
+    except mysql.connector.Error as err:
+        print(f"Error: {err}")
+    finally:
+        cursor.close()
+        db.close()
+
+# Sales Report
+def view_sales():
+    try:
+        db = connect_to_db()
+        cursor = db.cursor()
+
+        # Fetching all columns from Sales table
+        cursor.execute("SELECT medicine_name, quantity, total_price FROM Sales")
+        results = cursor.fetchall()
+
+        print("\n--- Sales Report ---")
+        print(f"{'Medicine':<20} {'Quantity':<10} {'Total Price':<15}")
+        print("-" * 55)
+
+        # Check if results exist
+        if results:
+            for sale in results:
+                # sale is a tuple with three elements
+                print(f"{sale[0]:<20} {sale[1]:<10} ₹{sale[2]:<15.2f}")
+        else:
+            print("No sales records found.")
+    except mysql.connector.Error as err:
+        print(f"Database Error: {err}")
+    except IndexError as e:
+        print("Data Access Error:", e)
+    finally:
+        cursor.close()
+        db.close()
+
+
+# Logout function
+def logout():
+    print("Logged out successfully!")
+    exit()
 
 # Main function
 def main():
-    print("\n--- Welcome to the Medical Store Management System ---")
+    setup_database()
     login()
 
 if __name__ == "__main__":
